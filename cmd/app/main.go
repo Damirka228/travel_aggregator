@@ -1,46 +1,27 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
-	"github.com/Damirka228/travel_aggregator/internal/domain"
+	deliveryhttp "github.com/Damirka228/travel_aggregator/internal/delivery/http"
+	"github.com/Damirka228/travel_aggregator/internal/repository"
+	"github.com/Damirka228/travel_aggregator/internal/usecase"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
-	http.HandleFunc("/destinations", destinationsHandler)
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	repo := repository.InMemoryDestinationRepository{}
+	service := usecase.NewTravelService(&repo)
+	handler := deliveryhttp.NewHandler(service)
+
+	router := chi.NewRouter()
+	router.Use(middleware.Logger)
+	router.Get("/destinations", handler.Destinations)
+
+	if err := http.ListenAndServe(":8080", router); err != nil {
 		fmt.Println("error start server:", err)
-	}
-
-}
-
-func Convert(value string) (int, error) {
-	val, err := strconv.Atoi(value)
-	if err != nil {
-		fmt.Println("error convertation budget: ", err)
-		return 0, err
-	}
-	return val, nil
-}
-
-func destinationsHandler(w http.ResponseWriter, r *http.Request) {
-	budget := r.URL.Query().Get("budget")
-	budgetStr, err := Convert(budget)
-	if err != nil{
-		http.Error(w, "invalid budget", http.StatusBadRequest)
 		return
 	}
-	days := r.URL.Query().Get("days")
-	daysStr, err := Convert(days)
-	if err != nil{
-		http.Error(w, "invalid budget", http.StatusBadRequest)
-		return
-	}
-
-	result := domain.FindDestinations(float64(budgetStr), daysStr)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
 }
