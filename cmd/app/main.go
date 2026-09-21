@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	deliveryhttp "github.com/Damirka228/travel_aggregator/internal/delivery/http"
 	"github.com/Damirka228/travel_aggregator/internal/repository"
@@ -12,8 +13,9 @@ import (
 )
 
 func main() {
-	repo := repository.InMemoryDestinationRepository{}
-	service := usecase.NewTravelService(&repo)
+	repo1 := &repository.InMemoryDestinationRepository{}
+	repo2 := &repository.ExternalDestinationRepository{Delay: 5 * time.Second}
+	service := usecase.NewTravelService(repo1, repo2)
 	handler := deliveryhttp.NewHandler(service)
 
 	router := chi.NewRouter()

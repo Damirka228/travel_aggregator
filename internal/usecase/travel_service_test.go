@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -9,16 +10,34 @@ import (
 )
 
 type mockDestinationRepository struct {
-	GetAllFunc func() ([]domain.Destination, error)
+	GetAllFunc func(ctx context.Context) ([]domain.Destination, error)
 }
 
-func (m *mockDestinationRepository) GetAll() ([]domain.Destination, error) {
-	return m.GetAllFunc()
+func (m *mockDestinationRepository) GetAll(ctx context.Context) ([]domain.Destination, error) {
+	return m.GetAllFunc(ctx)
+}
+
+func TestFindDestinations_MultipleRepos(t *testing.T) {
+	repo1 := &mockDestinationRepository{
+		GetAllFunc: func(ctx context.Context) ([]domain.Destination, error) {
+			return []domain.Destination{{City: "Бали", Price: 120000, Days: 10}}, nil
+		},
+	}
+	repo2 := &mockDestinationRepository{
+		GetAllFunc: func(ctx context.Context) ([]domain.Destination, error) {
+			return []domain.Destination{{City: "Ереван", Price: 150000, Days: 9}}, nil
+		},
+	}
+
+	service := NewTravelService(repo1, repo2)
+	res, err := service.FindDestinations(context.Background(), 200000, 15)
+	assert.NoError(t, err)
+	assert.Len(t, res, 2)
 }
 
 func TestFindDestinations(t *testing.T) {
 	repo := &mockDestinationRepository{
-		GetAllFunc: func() ([]domain.Destination, error) {
+		GetAllFunc: func(ctx context.Context) ([]domain.Destination, error) {
 			return []domain.Destination{
 				{City: "Стамбул", Country: "Турция", Price: 450000, Days: 7},
 				{City: "Бали", Country: "Индонезия", Price: 120000, Days: 10},
@@ -63,22 +82,23 @@ func TestFindDestinations(t *testing.T) {
 	}
 	for _, c := range tests {
 		t.Run(c.name, func(t *testing.T) {
-			res, err := service.FindDestinations(c.budget, c.days)
+			res, err := service.FindDestinations(context.Background(), c.budget, c.days)
 			assert.NoError(t, err)
 			assert.Equal(t, c.want, res)
 		})
 	}
 }
 
-func TestFindDestinations_RepoError(t *testing.T) {
+func TestFindDestinations_SingleRepoFails_ReturnsEmptyNotError(t *testing.T) {
 	repo := &mockDestinationRepository{
-		GetAllFunc: func() ([]domain.Destination, error) {
+		GetAllFunc: func(ctx context.Context) ([]domain.Destination, error) {
 			return nil, errors.New("db connection failed")
 		},
 	}
 	service := NewTravelService(repo)
 
-	_, err := service.FindDestinations(100000, 5)
+	_, err := service.FindDestinations(context.Background(), 100000, 5)
 
-	assert.Error(t, err) 
+	assert.NoError(t, err)
+	assert.Empty(t, err)
 }

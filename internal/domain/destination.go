@@ -1,5 +1,7 @@
 package domain
 
+import "context"
+
 type Destination struct {
 	City    string
 	Country string
@@ -8,6 +10,6 @@ type Destination struct {
 }
 
 type DestinationRepository interface{
-	GetAll()([]Destination, error)
+	GetAll(ctx context.Context)([]Destination, error)
 }
 
