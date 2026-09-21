@@ -1,6 +1,10 @@
 package repository
 
-import "github.com/Damirka228/travel_aggregator/internal/domain"
+import (
+	"context"
+
+	"github.com/Damirka228/travel_aggregator/internal/domain"
+)
 
 type InMemoryDestinationRepository struct{}
 
@@ -8,7 +12,7 @@ func NewInMemoryDestinationRepository() *InMemoryDestinationRepository {
 	return &InMemoryDestinationRepository{}
 }
 
-func (r *InMemoryDestinationRepository) GetAll() ([]domain.Destination, error) {
+func (r *InMemoryDestinationRepository) GetAll(ctx context.Context) ([]domain.Destination, error) {
 	return []domain.Destination{
 		{City: "Стамбул", Country: "Турция", Price: 450000, Days: 7},
 		{City: "Бали", Country: "Индонезия", Price: 120000, Days: 10},
