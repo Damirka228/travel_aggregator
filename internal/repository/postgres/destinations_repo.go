@@ -28,7 +28,7 @@ func (r *PostgresDestinationRepository) GetAll(ctx context.Context) ([]domain.De
 	for _, row := range rows {
 		price, err := row.Price.Float64Value()
 		if err != nil {
-			return nil, fmt.Errorf("convert price for destination %d: %w", row.ID, err)
+			return nil, fmt.Errorf("конвертация цена для направления %d: %w", row.ID, err)
 		}
 
 		result = append(result, domain.Destination{
