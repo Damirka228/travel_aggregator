@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/Damirka228/travel_aggregator/internal/domain"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type TravelpayoutsRepository struct {
@@ -37,15 +37,13 @@ func (r TravelpayoutsRepository) GetAll(ctx context.Context) ([]domain.Destinati
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status code: %d", resp.StatusCode)
 	}
-	var parsed CheapPriceResponse
+	var parsed domain.CheapPriceResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
 		return nil, fmt.Errorf("failed to decode JSON: %w", err)
 	}
 	var result []domain.Destination
 	for iataCode, options := range parsed.Data {
 		for _, opt := range options {
-			var numericPrice pgtype.Numeric
-			_ = numericPrice.Scan(fmt.Sprintf("%.2f", opt.Price))
 			result = append(result, domain.Destination{
 				City:    iataCode,
 				Country: "International",
@@ -55,6 +53,6 @@ func (r TravelpayoutsRepository) GetAll(ctx context.Context) ([]domain.Destinati
 			break
 		}
 	}
-	fmt.Printf("API нашло билетов: %d штук\n", len(result))
+	log.Printf("API нашло билетов: %d штук\n", len(result))
 	return result, nil
 }

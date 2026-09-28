@@ -22,6 +22,10 @@ func (h *Handler) Destinations(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid budget", http.StatusBadRequest)
 		return
 	}
+	if budget <= 1000 {
+		http.Error(w, "invalid budget: too small for international travel", http.StatusBadRequest)
+		return
+	}
 	days, err := strconv.Atoi(r.URL.Query().Get("days"))
 	if err != nil {
 		http.Error(w, "invalid days", http.StatusBadRequest)

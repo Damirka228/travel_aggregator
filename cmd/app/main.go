@@ -8,8 +8,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/Damirka228/travel_aggregator/internal/cache"
 	deliveryhttp "github.com/Damirka228/travel_aggregator/internal/delivery/http"
 	"github.com/Damirka228/travel_aggregator/internal/repository/postgres"
+	"github.com/Damirka228/travel_aggregator/internal/repository/redis"
 	"github.com/Damirka228/travel_aggregator/internal/repository/travelpayouts"
 	"github.com/Damirka228/travel_aggregator/internal/usecase"
 	"github.com/go-chi/chi/v5"
@@ -20,22 +22,34 @@ import (
 
 func main() {
 
+	ctx := context.Background()
+
 	if err := godotenv.Load(); err != nil {
-		log.Println("Файл .env не найден, берем системные переменные")
+		log.Println("Файл .env не найден")
 	}
 
 	token := os.Getenv("TRAVELPAYOUTS_TOKEN")
+	postgreconnStr := os.Getenv("POSTGRESQL_STR")
 
-	pool, err := pgxpool.New(context.Background(), "postgres://travel:travel@localhost:5432/travel_aggregator?sslmode=disable")
+	pool, err := pgxpool.New(ctx, postgreconnStr)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pool.Close()
-	postgresRepo := postgres.NewPostgresDestinationRepository(pool)
 
-	//repo1 := &repository.InMemoryDestinationRepository{}	//направления которые хранятся просто в мапе
-	repoApi := &travelpayouts.TravelpayoutsRepository{Token: token, Client: &http.Client{Timeout: 10 * time.Second}}
-	service := usecase.NewTravelService(repoApi, postgresRepo)
+	cacheL1Repo := cache.NewSharedCache(256, 5*time.Minute)
+	clientRedis, err := redis.NewClient(ctx, "localhost:6379")
+	if err != nil {
+		log.Fatalf("error connect redis, err: %w", err)
+	}
+	cachceRedisL2Repo := redis.NewDestinationsCachce(clientRedis, 1*time.Hour)
+
+	postgresRepo := postgres.NewPostgresDestinationRepository(pool)
+	repoApi := travelpayouts.NewTravelpayoutsRepository(token)
+
+	cachedApiRepo := cache.NewCachedDestinationRepository(repoApi, cacheL1Repo, cachceRedisL2Repo)
+
+	service := usecase.NewTravelService(postgresRepo, cachedApiRepo)
 	handler := deliveryhttp.NewHandler(service)
 
 	router := chi.NewRouter()

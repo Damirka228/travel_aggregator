@@ -97,8 +97,8 @@ func TestFindDestinations_SingleRepoFails_ReturnsEmptyNotError(t *testing.T) {
 	}
 	service := NewTravelService(repo)
 
-	_, err := service.FindDestinations(context.Background(), 100000, 5)
+	res, err := service.FindDestinations(context.Background(), 100000, 5)
 
 	assert.NoError(t, err)
-	assert.Empty(t, err)
+	assert.Empty(t, res)
 }

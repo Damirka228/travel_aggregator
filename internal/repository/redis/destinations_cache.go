@@ -1,0 +1,45 @@
+package redis
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"time"
+
+	"github.com/Damirka228/travel_aggregator/internal/domain"
+	"github.com/redis/go-redis/v9"
+)
+
+type DestinationsCahce struct {
+	redisClient *redis.Client
+	ttl         time.Duration
+}
+
+func NewDestinationsCachce(client *redis.Client, ttl time.Duration) *DestinationsCahce {
+	return &DestinationsCahce{
+		redisClient: client,
+		ttl:         ttl,
+	}
+}
+
+func (c *DestinationsCahce) Get(ctx context.Context, key string) ([]domain.Destination, bool) {
+	raw, err := c.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		log.Printf("error get redis: %s", err)
+		return nil, false
+	}
+	var result []domain.Destination
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, false
+	}
+	return result, true
+
+}
+
+func (c DestinationsCahce) Set(ctx context.Context, key string, val []domain.Destination) error {
+	raw, err := json.Marshal(val)
+	if err != nil {
+		return err
+	}
+	return c.redisClient.Set(ctx, key, raw, c.ttl).Err()
+}

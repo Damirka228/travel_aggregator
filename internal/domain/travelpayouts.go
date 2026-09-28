@@ -1,4 +1,4 @@
-package travelpayouts
+package domain
 
 type priceInfo struct {
 	Price       float64 `json:"price"`

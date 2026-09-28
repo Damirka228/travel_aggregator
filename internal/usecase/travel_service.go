@@ -29,7 +29,7 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 	for _, repo := range s.repos {
 		repo := repo
 		g.Go(func() error {
-			reqContext, cancel := context.WithTimeout(ctx, 2*time.Second)
+			reqContext, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
 			items, err := repo.GetAll(reqContext)
