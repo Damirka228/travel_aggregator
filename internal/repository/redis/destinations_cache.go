@@ -10,19 +10,19 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type DestinationsCahce struct {
+type DestinationsCache struct {
 	redisClient *redis.Client
 	ttl         time.Duration
 }
 
-func NewDestinationsCachce(client *redis.Client, ttl time.Duration) *DestinationsCahce {
-	return &DestinationsCahce{
+func NewDestinationsCache(client *redis.Client, ttl time.Duration) *DestinationsCache {
+	return &DestinationsCache{
 		redisClient: client,
 		ttl:         ttl,
 	}
 }
 
-func (c *DestinationsCahce) Get(ctx context.Context, key string) ([]domain.Destination, bool) {
+func (c *DestinationsCache) Get(ctx context.Context, key string) ([]domain.Destination, bool) {
 	raw, err := c.redisClient.Get(ctx, key).Result()
 	if err != nil {
 		log.Printf("error get redis: %s", err)
@@ -36,7 +36,7 @@ func (c *DestinationsCahce) Get(ctx context.Context, key string) ([]domain.Desti
 
 }
 
-func (c DestinationsCahce) Set(ctx context.Context, key string, val []domain.Destination) error {
+func (c DestinationsCache) Set(ctx context.Context, key string, val []domain.Destination) error {
 	raw, err := json.Marshal(val)
 	if err != nil {
 		return err

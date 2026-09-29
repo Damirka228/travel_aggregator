@@ -31,8 +31,12 @@ func (h *Handler) Destinations(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid days", http.StatusBadRequest)
 		return
 	}
-
-	result, err := h.service.FindDestinations(r.Context(), budget, days)
+	origin := r.URL.Query().Get("city")
+	if origin == "" {
+		http.Error(w, "invalid city: origin is required", http.StatusBadRequest)
+		return
+	}
+	result, err := h.service.FindDestinations(r.Context(), budget, days, origin)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

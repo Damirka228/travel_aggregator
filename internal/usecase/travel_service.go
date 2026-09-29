@@ -19,7 +19,7 @@ func NewTravelService(repos ...domain.DestinationRepository) *TravelService {
 	return &TravelService{repos: repos}
 }
 
-func (s *TravelService) FindDestinations(ctx context.Context, budget float64, days int) ([]domain.Destination, error) {
+func (s *TravelService) FindDestinations(ctx context.Context, budget float64, days int, origin string) ([]domain.Destination, error) {
 	var (
 		mtx sync.Mutex
 		all []domain.Destination
@@ -32,7 +32,7 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 			reqContext, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			items, err := repo.GetAll(reqContext)
+			items, err := repo.GetAll(reqContext, origin)
 			if err != nil {
 				log.Printf("источник %T не ответил: %v", repo, err)
 				return nil

@@ -27,8 +27,8 @@ func NewCachedDestinationRepository(service domain.DestinationRepository, l1 *Sh
 	}
 }
 
-func (r *CachedDestinationRepository) GetAll(ctx context.Context) ([]domain.Destination, error) {
-	cacheKey := "destinations:MOW"
+func (r *CachedDestinationRepository) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
+	cacheKey := fmt.Sprintf("destinations:%s", origin)
 
 	data, ok := r.l1.Get(cacheKey)
 	if ok {
@@ -41,7 +41,7 @@ func (r *CachedDestinationRepository) GetAll(ctx context.Context) ([]domain.Dest
 		return data, nil
 	}
 
-	data, err := r.service.GetAll(ctx)
+	data, err := r.service.GetAll(ctx, origin)
 	if err != nil {
 		return nil, fmt.Errorf("api travelpayouts error, err: %s", err)
 	}
