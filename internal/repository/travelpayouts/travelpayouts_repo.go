@@ -23,8 +23,8 @@ func NewTravelpayoutsRepository(token string) *TravelpayoutsRepository {
 	}
 }
 
-func (r TravelpayoutsRepository) GetAll(ctx context.Context) ([]domain.Destination, error) {
-	url := fmt.Sprintf("https://api.travelpayouts.com/v1/prices/cheap?origin=MOW&destination=-&token=%s", r.Token)
+func (r TravelpayoutsRepository) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
+	url := fmt.Sprintf("https://api.travelpayouts.com/v1/prices/cheap?origin=%s&destination=-&token=%s", origin, r.Token)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при создании запроса: %w", err)

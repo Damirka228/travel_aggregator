@@ -15,3 +15,10 @@ type Destination struct {
 	Price   pgtype.Numeric
 	Days    int32
 }
+
+type User struct {
+	ID           int32
+	Email        string
+	PasswordHash string
+	CreatedAt    pgtype.Timestamp
+}

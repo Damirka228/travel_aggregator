@@ -17,7 +17,7 @@ func NewPostgresDestinationRepository(pool *pgxpool.Pool) *PostgresDestinationRe
 	return &PostgresDestinationRepository{queries: dbqueries.New(pool)}
 }
 
-func (r *PostgresDestinationRepository) GetAll(ctx context.Context) ([]domain.Destination, error) {
+func (r *PostgresDestinationRepository) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
 	rows, err := r.queries.GetAllDestinations(ctx)
 	if err != nil {
 		return nil, err
