@@ -1,0 +1,16 @@
+{"level":"info","time":1790759064,"message":"the logger is initialized"}
+{"level":"info","time":1790796543,"message":"the logger is initialized"}
+{"level":"info","time":1790796543,"message":"start server port :8080"}
+{"level":"info","time":1790796596,"message":"the logger is initialized"}
+{"level":"info","time":1790796596,"message":"start server port :8080"}
+{"level":"info","origin":"MOW","time":1790796616,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"warn","error":"api travelpayouts error, err: network error: Get \"https://api.travelpayouts.com/v1/prices/cheap?origin=MOW&destination=-&token=bd2a430c80f36dd1052eebb940edc5c6\": context deadline exceeded","repo_type":"*cache.CachedDestinationRepository","origin":"MOW","time":1790796626,"message":"Один из источников билетов не ответил на запрос"}
+{"level":"info","origin":"MOW","time":1790796875,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"warn","error":"api travelpayouts error, err: network error: Get \"https://api.travelpayouts.com/v1/prices/cheap?origin=MOW&destination=-&token=bd2a430c80f36dd1052eebb940edc5c6\": context canceled","repo_type":"*cache.CachedDestinationRepository","origin":"MOW","time":1790796881,"message":"Один из источников билетов не ответил на запрос"}
+{"level":"info","time":1790796903,"message":"the logger is initialized"}
+{"level":"info","time":1790796903,"message":"start server port :8080"}
+{"level":"info","origin":"MOW","time":1790796913,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"info","time":1790797563,"message":"the logger is initialized"}
+{"level":"info","time":1790797563,"message":"start server port :8080"}
+{"level":"info","origin":"MOW","time":1790797576,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1790797583,"message":"Попадание в L1 кэш (ОЗУ)"}
