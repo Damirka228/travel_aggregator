@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/Damirka228/travel_aggregator/internal/cache"
 	deliveryhttp "github.com/Damirka228/travel_aggregator/internal/delivery/http"
+	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
 	"github.com/Damirka228/travel_aggregator/internal/repository/postgres"
 	"github.com/Damirka228/travel_aggregator/internal/repository/redis"
 	"github.com/Damirka228/travel_aggregator/internal/repository/travelpayouts"
@@ -23,12 +22,16 @@ import (
 type App struct {
 	httpServer *http.Server
 	pgPool     *pgxpool.Pool
+	log        logger.Logger
 }
 
 func NewApp() *App {
+	appLogger := logger.New()
+	appLogger.Info().Msg("the logger is initialized")
+
 	ctx := context.Background()
 	if err := godotenv.Load(); err != nil {
-		log.Println("Файл .env не найден")
+		appLogger.Warn().Msg("Файл .env не найден")
 	}
 
 	token := os.Getenv("TRAVELPAYOUTS_TOKEN")
@@ -36,26 +39,26 @@ func NewApp() *App {
 
 	pool, err := pgxpool.New(ctx, postgreconnStr)
 	if err != nil {
-		log.Fatal(err)
+		appLogger.Fatal().Err(err).Msg("Критический сбой: не удалось подключить пул Postgres")
 	}
 
 	cacheL1Repo := cache.NewSharedCache(256, 5*time.Minute)
 	clientRedis, err := redis.NewClient(ctx, "localhost:6379")
 	if err != nil {
-		log.Fatalf("error connect redis, err: %s", err)
+		appLogger.Fatal().Err(err).Msg("Критический сбой: не удалось подключиться к Redis")
 	}
 	cacheRedisL2Repo := redis.NewDestinationsCache(clientRedis, 1*time.Hour)
 
 	postgresRepo := postgres.NewPostgresDestinationRepository(pool)
 	repoApi := travelpayouts.NewTravelpayoutsRepository(token)
-	cachedApiRepo := cache.NewCachedDestinationRepository(repoApi, cacheL1Repo, cacheRedisL2Repo)
+	cachedApiRepo := cache.NewCachedDestinationRepository(repoApi, cacheL1Repo, cacheRedisL2Repo, appLogger)
 
 	//jwt
 	postgresUserRepo := postgres.NewPostgresUserRepository(pool)
-	authService := usecase.NewAuthService(postgresUserRepo)
+	authService := usecase.NewAuthService(postgresUserRepo, appLogger)
 	authHandler := deliveryhttp.NewAuthHandler(authService)
 
-	service := usecase.NewTravelService(postgresRepo, cachedApiRepo)
+	service := usecase.NewTravelService(appLogger, postgresRepo, cachedApiRepo)
 	handler := deliveryhttp.NewHandler(service)
 
 	router := chi.NewRouter()
@@ -72,14 +75,17 @@ func NewApp() *App {
 
 	return &App{
 		httpServer: server,
+		pgPool:     pool,
+		log:        appLogger,
 	}
 }
 
 func (a *App) Run() error {
-	fmt.Println("statr server")
+	a.log.Info().Msg("start server port :8080")
 	return a.httpServer.ListenAndServe()
 }
 
 func (a *App) Shutdown() {
 	a.pgPool.Close()
+	a.log.Info().Msg("Пул подключений к Postgres успешно закрыт")
 }

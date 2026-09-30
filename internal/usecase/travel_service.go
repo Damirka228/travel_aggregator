@@ -2,21 +2,25 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
-	"log"
-
 	"github.com/Damirka228/travel_aggregator/internal/domain"
+	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
 	"golang.org/x/sync/errgroup"
 )
 
 type TravelService struct {
 	repos []domain.DestinationRepository
+	log   logger.Logger
 }
 
-func NewTravelService(repos ...domain.DestinationRepository) *TravelService {
-	return &TravelService{repos: repos}
+func NewTravelService(log logger.Logger, repos ...domain.DestinationRepository) *TravelService {
+	return &TravelService{
+		repos: repos,
+		log:   log,
+	}
 }
 
 func (s *TravelService) FindDestinations(ctx context.Context, budget float64, days int, origin string) ([]domain.Destination, error) {
@@ -34,7 +38,7 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 
 			items, err := repo.GetAll(reqContext, origin)
 			if err != nil {
-				log.Printf("источник %T не ответил: %v", repo, err)
+				s.log.Warn().Err(err).Str("repo_type", fmt.Sprintf("%T", repo)).Str("origin", origin).Msg("Один из источников билетов не ответил на запрос")
 				return nil
 			}
 
