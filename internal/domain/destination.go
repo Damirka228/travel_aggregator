@@ -11,6 +11,6 @@ type Destination struct {
 }
 
 type DestinationRepository interface{
-	GetAll(ctx context.Context, origin string)([]Destination, error)
+	GetAll(ctx context.Context, origi string)([]Destination, error)
 }
 
