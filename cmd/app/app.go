@@ -64,6 +64,7 @@ func NewApp() *App {
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
 
+	router.Mount("/debug", middleware.Profiler())
 	router.Get("/destinations", handler.Destinations)
 	router.Post("/auth/signup", authHandler.SignUp)
 	router.Post("/auth/signin", authHandler.SignIn)
