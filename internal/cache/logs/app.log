@@ -1,0 +1,6 @@
+{"level":"info","origin":"MOW","time":1790851321,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1790851321,"message":"Попадание в L1 кэш (ОЗУ)"}
+{"level":"info","origin":"MOW","time":1790852217,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1790852217,"message":"Попадание в L1 кэш (ОЗУ)"}
+{"level":"info","origin":"MOW","time":1790852600,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1790852600,"message":"Попадание в L1 кэш (ОЗУ)"}
