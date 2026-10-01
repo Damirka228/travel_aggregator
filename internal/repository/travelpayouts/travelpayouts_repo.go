@@ -64,11 +64,11 @@ func (r TravelpayoutsRepository) GetAll(ctx context.Context, origin string) ([]d
 			}
 
 			result = append(result, domain.Destination{
-				ID:      idCounter, 
+				ID:      idCounter,
 				City:    iataCode,
 				Country: "International",
-				Price:   opt.Price, 
-				Days:    realDays,  
+				Price:   opt.Price,
+				Days:    realDays,
 			})
 
 			idCounter++
