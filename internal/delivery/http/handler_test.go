@@ -11,18 +11,27 @@ import (
 	"github.com/Damirka228/travel_aggregator/internal/usecase"
 )
 
-type mockFlightRepository struct{}
+type mockFlightRepo struct{}
 
-func (m *mockFlightRepository) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
+func (m *mockFlightRepo) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
 	return []domain.Destination{
 		{ID: 1, City: "KZN", Country: "International", Price: 5000, Days: 3},
 	}, nil
 }
 
+type mockHotelRepo struct{}
+
+func (m *mockHotelRepo) GetByCity(ctx context.Context, city string) ([]domain.Hotel, error) {
+	return []domain.Hotel{
+		{ID: 201, Name: "Test Hotel", City: city, Price: 1000, Stars: 3},
+	}, nil
+}
+
 func TestDestinationsHandler_Success(t *testing.T) {
 	log := logger.New()
-	mockRepo := &mockFlightRepository{}
-	travelService := usecase.NewTravelService(log, mockRepo)
+	mockFlight := &mockFlightRepo{}
+	mockHotel := &mockHotelRepo{}
+	travelService := usecase.NewTravelService(log, mockHotel, mockFlight)
 	handler := NewHandler(travelService)
 
 	req, err := http.NewRequest("GET", "/destinations?budget=100000&days=5&city=MOW", nil)
@@ -34,18 +43,19 @@ func TestDestinationsHandler_Success(t *testing.T) {
 	handler.Destinations(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Ожидался статус 200, получено: %v", status)
+		t.Errorf("Handler returned wrong status: got %v, want %v", status, http.StatusOK)
 	}
 
 	if contentType := rr.Header().Get("Content-Type"); contentType != "application/json" {
-		t.Errorf("Ожидался JSON-ответ, получено: %v", contentType)
+		t.Errorf("Expected JSON content type, got: %v", contentType)
 	}
 }
 
 func TestDestinationsHandler_TooSmallBudget(t *testing.T) {
 	log := logger.New()
-	mockRepo := &mockFlightRepository{}
-	travelService := usecase.NewTravelService(log, mockRepo)
+	mockFlight := &mockFlightRepo{}
+	mockHotel := &mockHotelRepo{}
+	travelService := usecase.NewTravelService(log, mockHotel, mockFlight)
 	handler := NewHandler(travelService)
 
 	req, err := http.NewRequest("GET", "/destinations?budget=500&days=5&city=MOW", nil)
@@ -57,14 +67,15 @@ func TestDestinationsHandler_TooSmallBudget(t *testing.T) {
 	handler.Destinations(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("Ожидался статус 400 при бюджете <= 1000, получено: %v", status)
+		t.Errorf("Expected status 400 for budget <= 1000, got: %v", status)
 	}
 }
 
 func TestDestinationsHandler_MissingCity(t *testing.T) {
 	log := logger.New()
-	mockRepo := &mockFlightRepository{}
-	travelService := usecase.NewTravelService(log, mockRepo)
+	mockFlight := &mockFlightRepo{}
+	mockHotel := &mockHotelRepo{}
+	travelService := usecase.NewTravelService(log, mockHotel, mockFlight)
 	handler := NewHandler(travelService)
 
 	req, err := http.NewRequest("GET", "/destinations?budget=50000&days=5", nil)
@@ -76,6 +87,6 @@ func TestDestinationsHandler_MissingCity(t *testing.T) {
 	handler.Destinations(rr, req)
 
 	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("Ожидался статус 400 при отсутствии города, получено: %v", status)
+		t.Errorf("Expected status 400 for missing city, got: %v", status)
 	}
 }

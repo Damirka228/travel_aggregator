@@ -24791,3 +24791,6 @@
 {"level":"debug","key":"destinations:KZN","time":1790843501,"message":"Попадание в L1 кэш (ОЗУ)"}
 {"level":"debug","key":"destinations:AER","time":1790843501,"message":"Попадание в L1 кэш (ОЗУ)"}
 {"level":"debug","key":"destinations:KZN","time":1790843501,"message":"Попадание в L1 кэш (ОЗУ)"}
+{"level":"info","time":1791021985,"message":"the logger is initialized"}
+{"level":"info","time":1791021985,"message":"start server port :8080"}
+{"level":"info","origin":"MOW","time":1791021999,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}

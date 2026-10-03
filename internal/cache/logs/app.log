@@ -4,3 +4,9 @@
 {"level":"debug","key":"destinations:MOW","time":1790852217,"message":"Попадание в L1 кэш (ОЗУ)"}
 {"level":"info","origin":"MOW","time":1790852600,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
 {"level":"debug","key":"destinations:MOW","time":1790852600,"message":"Попадание в L1 кэш (ОЗУ)"}
+{"level":"info","origin":"MOW","time":1791022265,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1791022265,"message":"Попадание в L1 кэш (ОЗУ)"}
+{"level":"info","origin":"MOW","time":1791022364,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1791022364,"message":"Попадание в L1 кэш (ОЗУ)"}
+{"level":"info","origin":"MOW","time":1791022381,"message":"Промах всех кэшей. Запрос в API Travelpayouts..."}
+{"level":"debug","key":"destinations:MOW","time":1791022381,"message":"Попадание в L1 кэш (ОЗУ)"}
