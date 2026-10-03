@@ -14,11 +14,7 @@ func (m *mockDestinationRepository) GetAll(ctx context.Context, origin string) (
 	var result []domain.Destination
 	for i := 1; i <= 100; i++ {
 		result = append(result, domain.Destination{
-			ID:      i,
-			City:    "KZN",
-			Country: "International",
-			Price:   float64(2000 + (i * 100)),
-			Days:    1 + (i % 7),
+			ID: i, City: "KZN", Country: "International", Price: float64(2000 + (i * 100)), Days: 3,
 		})
 	}
 	return result, nil
@@ -26,13 +22,15 @@ func (m *mockDestinationRepository) GetAll(ctx context.Context, origin string) (
 
 func BenchmarkFindDestinations(b *testing.B) {
 	log := logger.New()
-	mockRepo := &mockDestinationRepository{}
-	service := NewTravelService(log, mockRepo)
+	mockFlight := &mockDestinationRepository{}
+	mockHotel := &mockHotelRepository{}
+
+	service := NewTravelService(log, mockHotel, mockFlight)
 	ctx := context.Background()
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, _ = service.FindDestinations(ctx, 50000, 7, "MOW")
+		_, _ = service.FindDestinations(ctx, 300000, 7, "MOW")
 	}
 }

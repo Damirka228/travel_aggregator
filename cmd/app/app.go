@@ -9,6 +9,7 @@ import (
 	"github.com/Damirka228/travel_aggregator/internal/cache"
 	deliveryhttp "github.com/Damirka228/travel_aggregator/internal/delivery/http"
 	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
+	"github.com/Damirka228/travel_aggregator/internal/repository/hotels"
 	"github.com/Damirka228/travel_aggregator/internal/repository/postgres"
 	"github.com/Damirka228/travel_aggregator/internal/repository/redis"
 	"github.com/Damirka228/travel_aggregator/internal/repository/travelpayouts"
@@ -49,6 +50,7 @@ func NewApp() *App {
 	}
 	cacheRedisL2Repo := redis.NewDestinationsCache(clientRedis, 1*time.Hour)
 
+	hotelRepo := hotels.NewHotelRepository()
 	postgresRepo := postgres.NewPostgresDestinationRepository(pool)
 	repoApi := travelpayouts.NewTravelpayoutsRepository(token)
 	cachedApiRepo := cache.NewCachedDestinationRepository(repoApi, cacheL1Repo, cacheRedisL2Repo, appLogger)
@@ -58,7 +60,7 @@ func NewApp() *App {
 	authService := usecase.NewAuthService(postgresUserRepo, appLogger)
 	authHandler := deliveryhttp.NewAuthHandler(authService)
 
-	service := usecase.NewTravelService(appLogger, postgresRepo, cachedApiRepo)
+	service := usecase.NewTravelService(appLogger, hotelRepo, postgresRepo, cachedApiRepo)
 	handler := deliveryhttp.NewHandler(service)
 
 	router := chi.NewRouter()

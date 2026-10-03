@@ -12,37 +12,41 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type TicketItem struct {
-	domain.Destination
-	Description string `json:"description"`
+type TourItem struct {
+	Flight      domain.Destination `json:"flight"`
+	Hotel       domain.Hotel       `json:"hotel"`
+	TotalPrice  float64            `json:"total_price"`
+	Description string             `json:"description"`
 }
 
 type TravelResponse struct {
-	BestOption TicketItem   `json:"best_option"`
-	Cheapest   []TicketItem `json:"cheapest"`
-	Longest    []TicketItem `json:"longest_vacation"`
+	BestTour []TourItem `json:"best_tour"`
+	Cheapest []TourItem `json:"cheapest_tours"`
+	Longest  []TourItem `json:"longest_tours"`
 }
 
 type TravelService struct {
-	repos []domain.DestinationRepository
-	log   logger.Logger
+	flightRepos []domain.DestinationRepository
+	hotelRepo   domain.HotelRepository
+	log         logger.Logger
 }
 
-func NewTravelService(log logger.Logger, repos ...domain.DestinationRepository) *TravelService {
+func NewTravelService(log logger.Logger, hotelRepo domain.HotelRepository, flightRepos ...domain.DestinationRepository) *TravelService {
 	return &TravelService{
-		repos: repos,
-		log:   log,
+		flightRepos: flightRepos,
+		hotelRepo:   hotelRepo,
+		log:         log,
 	}
 }
 
 func (s *TravelService) FindDestinations(ctx context.Context, budget float64, days int, origin string) (TravelResponse, error) {
 	var (
-		mtx sync.Mutex
-		all []domain.Destination
-		g   errgroup.Group
+		mtx        sync.Mutex
+		allFlights []domain.Destination
+		g          errgroup.Group
 	)
 
-	for _, repo := range s.repos {
+	for _, repo := range s.flightRepos {
 		repo := repo
 		g.Go(func() error {
 			reqContext, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -50,82 +54,85 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 
 			items, err := repo.GetAll(reqContext, origin)
 			if err != nil {
-				s.log.Warn().Err(err).Str("repo_type", fmt.Sprintf("%T", repo)).Str("origin", origin).Msg("Один из источников билетов не ответил на запрос")
+				s.log.Warn().Err(err).Str("repo_type", fmt.Sprintf("%T", repo)).Msg("Источник билетов не ответил")
 				return nil
 			}
 
 			mtx.Lock()
-			all = append(all, items...)
+			allFlights = append(allFlights, items...)
 			mtx.Unlock()
 			return nil
 		})
 	}
-	g.Wait()
 
-	filtered := []domain.Destination{}
-	for _, d := range all {
-		if d.Price <= budget && d.Days <= days {
-			filtered = append(filtered, d)
+	if err := g.Wait(); err != nil {
+		return TravelResponse{}, err
+	}
+
+	var combinedTours []TourItem
+
+	for _, flight := range allFlights {
+		hotels, err := s.hotelRepo.GetByCity(ctx, flight.City)
+		if err != nil || len(hotels) == 0 {
+			continue
+		}
+
+		for _, hotel := range hotels {
+			totalPrice := flight.Price + (hotel.Price * float64(days))
+
+			if totalPrice > budget || flight.Days > days {
+				continue
+			}
+
+			desc := fmt.Sprintf("Выгодный тур в г. %s! Перелет туда-обратно + отель %s (%d) на %d дней между рейсами. Всё включено!",
+				domain.GetCityNameByIATA(flight.City), hotel.Name, hotel.Stars, days)
+
+			combinedTours = append(combinedTours, TourItem{
+				Flight:      flight,
+				Hotel:       hotel,
+				TotalPrice:  totalPrice,
+				Description: desc,
+			})
 		}
 	}
 
-	if len(filtered) == 0 {
+	if len(combinedTours) == 0 {
 		return TravelResponse{}, nil
 	}
 
-	//5 самых дешевых билетов
-	cheapestList := append([]domain.Destination{}, filtered...)
-	sort.Slice(cheapestList, func(i, j int) bool {
-		return cheapestList[i].Price < cheapestList[j].Price
+	cheapestTours := append([]TourItem{}, combinedTours...)
+	sort.Slice(cheapestTours, func(i, j int) bool {
+		return cheapestTours[i].TotalPrice < cheapestTours[j].TotalPrice
 	})
-	if len(cheapestList) > 5 {
-		cheapestList = cheapestList[:5]
+	if len(cheapestTours) > 5 {
+		cheapestTours = cheapestTours[:5]
 	}
 
-	//5 больше дней отдыха
-	longestList := append([]domain.Destination{}, filtered...)
-	sort.Slice(longestList, func(i, j int) bool {
-		return longestList[i].Days > longestList[j].Days
+	luxuryTours := append([]TourItem{}, combinedTours...)
+	sort.Slice(luxuryTours, func(i, j int) bool {
+		return luxuryTours[i].Hotel.Stars > luxuryTours[j].Hotel.Stars
 	})
-	if len(longestList) > 3 {
-		longestList = longestList[:3]
+	if len(luxuryTours) > 5 {
+		luxuryTours = luxuryTours[:5]
 	}
 
-	//самый лучший билет. Цена + (Дни * Коэффициент ценности дня). Ищем элемент с минимальным весом
-	bestOption := filtered[0]
-	minScore := bestOption.Price + (float64(bestOption.Days) * 1000.0)
+	bestTour := combinedTours[0]
+	minScore := bestTour.TotalPrice - (float64(bestTour.Hotel.Stars) * 2000.0)
 
-	for _, d := range filtered {
-		score := d.Price + (float64(d.Days) * 1000.0)
+	for _, tItem := range combinedTours {
+		score := tItem.TotalPrice - (float64(tItem.Hotel.Stars) * 2000.0)
 		if score < minScore {
 			minScore = score
-			bestOption = d
+			bestTour = tItem
 		}
 	}
 
-	bestCard := TicketItem{
-		Destination: bestOption,
-		Description: fmt.Sprintf("Самый сбалансированный перелет! Авиабилет туда-обратно в г. %s, %d дн. между рейсами всего за %.0f руб.",
-			domain.GetCityNameByIATA(bestOption.City), bestOption.Days, bestOption.Price),
-	}
-
-	cheapestCards := make([]TicketItem, 0, len(cheapestList))
-	for i, d := range cheapestList {
-		desc := fmt.Sprintf("Дешевый перелет туда-обратно (Топ-%d)! Билет в г. %s за %.0f руб. (%d дн. между рейсами)",
-			i+1, domain.GetCityNameByIATA(d.City), d.Price, d.Days)
-		cheapestCards = append(cheapestCards, TicketItem{Destination: d, Description: desc})
-	}
-
-	longestCards := make([]TicketItem, 0, len(longestList))
-	for i, d := range longestList {
-		desc := fmt.Sprintf("Максимальное время пребывания (Топ-%d)! %d дней в г. %s между рейсами. Цена билетов туда-обратно: %.0f руб.",
-			i+1, d.Days, domain.GetCityNameByIATA(d.City), d.Price)
-		longestCards = append(longestCards, TicketItem{Destination: d, Description: desc})
-	}
+	bestTour.Description = fmt.Sprintf("РЕКОМЕНДУЕМЫЙ ЛУЧШИЙ ТУР! Идеальный перелет и отель %s (%d) в г. %s на %d дней. Общая цена за ВСЁ: %.0f руб.",
+		bestTour.Hotel.Name, bestTour.Hotel.Stars, domain.GetCityNameByIATA(bestTour.Flight.City), days, bestTour.TotalPrice)
 
 	return TravelResponse{
-		BestOption: bestCard,
-		Cheapest:   cheapestCards,
-		Longest:    longestCards,
+		BestTour: []TourItem{bestTour},
+		Cheapest: cheapestTours,
+		Longest:  luxuryTours,
 	}, nil
 }
