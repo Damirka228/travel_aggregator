@@ -12,6 +12,7 @@ import (
 
 type Logger struct {
 	zerolog.Logger
+	closer io.Closer
 }
 
 func New() Logger {
@@ -34,5 +35,12 @@ func New() Logger {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	internalZl := zerolog.New(mw).With().Timestamp().Logger()
 
-	return Logger{internalZl}
+	return Logger{Logger: internalZl, closer: fileWriter}
+}
+
+func (l Logger) Close() error {
+	if l.closer == nil {
+		return nil
+	}
+	return l.closer.Close()
 }

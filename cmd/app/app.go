@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/Damirka228/travel_aggregator/internal/cache"
@@ -14,81 +17,137 @@ import (
 	"github.com/Damirka228/travel_aggregator/internal/repository/redis"
 	"github.com/Damirka228/travel_aggregator/internal/repository/travelpayouts"
 	"github.com/Damirka228/travel_aggregator/internal/usecase"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	goredis "github.com/redis/go-redis/v9"
+)
+
+const (
+	startupTimeout  = 10 * time.Second
+	shutdownTimeout = 15 * time.Second
 )
 
 type App struct {
-	httpServer *http.Server
-	pgPool     *pgxpool.Pool
-	log        logger.Logger
+	httpServer   *http.Server
+	pgPool       *pgxpool.Pool
+	redisClient  *goredis.Client
+	log          logger.Logger
+	shutdownOnce sync.Once
+	shutdownErr  error
 }
 
-func NewApp() *App {
-	appLogger := logger.New()
-	appLogger.Info().Msg("the logger is initialized")
+func NewApp(ctx context.Context) (_ *App, err error) {
+	app := &App{log: logger.New()}
+	defer func() {
+		if err != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+			defer cancel()
+			err = errors.Join(err, app.Shutdown(cleanupCtx))
+		}
+	}()
 
-	ctx := context.Background()
-	if err := godotenv.Load(); err != nil {
-		appLogger.Warn().Msg("Файл .env не найден")
+	if loadErr := godotenv.Load(); loadErr != nil {
+		if !os.IsNotExist(loadErr) {
+			return nil, fmt.Errorf("load .env: %w", loadErr)
+		}
+		app.log.Warn().Msg("Файл .env не найден; используются переменные окружения")
 	}
 
-	token := os.Getenv("TRAVELPAYOUTS_TOKEN")
-	postgreconnStr := os.Getenv("POSTGRESQL_STR")
-
-	pool, err := pgxpool.New(ctx, postgreconnStr)
+	cfg, err := loadConfig()
 	if err != nil {
-		appLogger.Fatal().Err(err).Msg("Критический сбой: не удалось подключить пул Postgres")
+		return nil, err
+	}
+
+	startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
+	defer cancel()
+
+	app.pgPool, err = pgxpool.New(startupCtx, cfg.databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("create Postgres pool: %w", err)
+	}
+	if err := app.pgPool.Ping(startupCtx); err != nil {
+		return nil, fmt.Errorf("connect to Postgres: %w", err)
+	}
+
+	app.redisClient, err = redis.NewClient(startupCtx, cfg.redisAddr)
+	if err != nil {
+		return nil, fmt.Errorf("connect to Redis: %w", err)
 	}
 
 	cacheL1Repo := cache.NewSharedCache(256, 5*time.Minute)
-	clientRedis, err := redis.NewClient(ctx, "localhost:6379")
-	if err != nil {
-		appLogger.Fatal().Err(err).Msg("Критический сбой: не удалось подключиться к Redis")
-	}
-	cacheRedisL2Repo := redis.NewDestinationsCache(clientRedis, 1*time.Hour)
-
+	cacheRedisL2Repo := redis.NewDestinationsCache(app.redisClient, time.Hour)
 	hotelRepo := hotels.NewHotelRepository()
-	postgresRepo := postgres.NewPostgresDestinationRepository(pool)
-	repoApi := travelpayouts.NewTravelpayoutsRepository(token)
-	cachedApiRepo := cache.NewCachedDestinationRepository(repoApi, cacheL1Repo, cacheRedisL2Repo, appLogger)
+	postgresRepo := postgres.NewPostgresDestinationRepository(app.pgPool)
+	repoAPI := travelpayouts.NewTravelpayoutsRepository(cfg.travelpayoutsToken)
+	cachedAPIRepo := cache.NewCachedDestinationRepository(repoAPI, cacheL1Repo, cacheRedisL2Repo, app.log)
 
-	//jwt
-	postgresUserRepo := postgres.NewPostgresUserRepository(pool)
-	authService := usecase.NewAuthService(postgresUserRepo, appLogger)
+	postgresUserRepo := postgres.NewPostgresUserRepository(app.pgPool)
+	authService := usecase.NewAuthService(postgresUserRepo, app.log)
 	authHandler := deliveryhttp.NewAuthHandler(authService)
 
-	service := usecase.NewTravelService(appLogger, hotelRepo, postgresRepo, cachedApiRepo)
+	service := usecase.NewTravelService(app.log, hotelRepo, postgresRepo, cachedAPIRepo)
 	handler := deliveryhttp.NewHandler(service)
+	router := deliveryhttp.NewRouter(handler, authHandler, cfg.enableProfiler)
 
-	router := chi.NewRouter()
-	router.Use(middleware.Logger)
-
-	router.Mount("/debug", middleware.Profiler())
-	router.Get("/destinations", handler.Destinations)
-	router.Post("/auth/signup", authHandler.SignUp)
-	router.Post("/auth/signin", authHandler.SignIn)
-
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: router,
+	app.httpServer = &http.Server{
+		Addr:              ":" + cfg.port,
+		Handler:           router.SetupRoutes(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       time.Minute,
 	}
 
-	return &App{
-		httpServer: server,
-		pgPool:     pool,
-		log:        appLogger,
+	return app, nil
+}
+
+func (a *App) Run(ctx context.Context) error {
+	a.log.Info().Str("addr", a.httpServer.Addr).Msg("HTTP-сервер запускается")
+
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- a.httpServer.ListenAndServe()
+	}()
+
+	select {
+	case <-ctx.Done():
+		a.log.Info().Msg("Получен запрос на остановку приложения")
+		return nil
+	case err := <-serverErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return fmt.Errorf("serve HTTP: %w", err)
 	}
 }
 
-func (a *App) Run() error {
-	a.log.Info().Msg("start server port :8080")
-	return a.httpServer.ListenAndServe()
-}
+// Shutdown drains HTTP requests before closing the resources used by handlers.
+// It is safe to call more than once, including after partial initialization.
+func (a *App) Shutdown(ctx context.Context) error {
+	a.shutdownOnce.Do(func() {
+		if a.httpServer != nil {
+			a.log.Info().Msg("Ожидание завершения текущих HTTP-запросов")
+			if err := a.httpServer.Shutdown(ctx); err != nil {
+				a.log.Error().Err(err).Msg("Время graceful shutdown истекло; соединения закрываются принудительно")
+				a.shutdownErr = errors.Join(a.shutdownErr, fmt.Errorf("shutdown HTTP: %w", err))
+				if closeErr := a.httpServer.Close(); closeErr != nil {
+					a.shutdownErr = errors.Join(a.shutdownErr, fmt.Errorf("close HTTP: %w", closeErr))
+				}
+			}
+		}
 
-func (a *App) Shutdown() {
-	a.pgPool.Close()
-	a.log.Info().Msg("Пул подключений к Postgres успешно закрыт")
+		if a.pgPool != nil {
+			a.pgPool.Close()
+		}
+		if a.redisClient != nil {
+			if err := a.redisClient.Close(); err != nil {
+				a.shutdownErr = errors.Join(a.shutdownErr, fmt.Errorf("close Redis: %w", err))
+			}
+		}
+
+		a.log.Info().Msg("Ресурсы приложения закрыты")
+		if err := a.log.Close(); err != nil {
+			a.shutdownErr = errors.Join(a.shutdownErr, fmt.Errorf("close logger: %w", err))
+		}
+	})
+
+	return a.shutdownErr
 }
