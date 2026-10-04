@@ -13,7 +13,8 @@ func NewClient(ctx context.Context, addr string) (*redis.Client, error) {
 	})
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("error ping redis, err: %s", err)
+		_ = client.Close()
+		return nil, fmt.Errorf("ping Redis: %w", err)
 	}
 
 	return client, nil
