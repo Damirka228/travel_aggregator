@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"hash/fnv"
 	"sync"
 	"time"
@@ -44,14 +45,50 @@ func (s *SharedCache) getShard(key string) *shard {
 
 func (c *SharedCache) Get(key string) ([]domain.Destination, bool) {
 	s := c.getShard(key)
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
 	e, ok := s.data[key]
-	if !ok || time.Now().After(e.expiresAt) {
+	if !ok {
 		return nil, false
 	}
+
+	if !time.Now().Before(e.expiresAt) {
+		delete(s.data, key)
+		return nil, false
+	}
+
 	return e.data, true
+}
+
+func (c *SharedCache) DeleteExpired() {
+	for _, s := range c.shards {
+		s.mtx.Lock()
+
+		now := time.Now()
+
+		for key, e := range s.data {
+			if !now.Before(e.expiresAt) {
+				delete(s.data, key)
+			}
+		}
+		s.mtx.Unlock()
+	}
+}
+
+func (c *SharedCache) RunCleanUp(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.DeleteExpired()
+		}
+	}
 }
 
 func (c *SharedCache) Set(key string, data []domain.Destination) {

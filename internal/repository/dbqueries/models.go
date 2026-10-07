@@ -9,11 +9,16 @@ import (
 )
 
 type Destination struct {
-	ID      int32
-	City    string
-	Country string
-	Price   pgtype.Numeric
-	Days    int32
+	ID            int32
+	City          string
+	Country       string
+	Price         pgtype.Numeric
+	Days          int32
+	Origin        pgtype.Text
+	DepartureDate pgtype.Date
+	ReturnDate    pgtype.Date
+	DepartureAt   pgtype.Timestamptz
+	ReturnAt      pgtype.Timestamptz
 }
 
 type User struct {

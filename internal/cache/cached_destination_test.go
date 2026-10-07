@@ -8,6 +8,7 @@ import (
 
 	"github.com/Damirka228/travel_aggregator/internal/domain"
 	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
+	"github.com/rs/zerolog"
 )
 
 type mockApiRepo struct {
@@ -15,7 +16,7 @@ type mockApiRepo struct {
 	err         error
 }
 
-func (m *mockApiRepo) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
+func (m *mockApiRepo) GetAll(ctx context.Context, search domain.FlightSearch) ([]domain.Destination, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -37,16 +38,17 @@ func (m *mockL2Cache) Set(ctx context.Context, key string, val []domain.Destinat
 
 // TestCache_AllMiss_FetchFromAPI — Полный промах кэшей. Сервер идет в API и кэширует всё!
 func TestCache_AllMiss_FetchFromAPI(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	apiData := []domain.Destination{{ID: 1, City: "KZN", Price: 3000}}
 
 	apiMock := &mockApiRepo{destination: apiData}
 	l2Mock := &mockL2Cache{store: make(map[string][]domain.Destination)}
 	l1Cache := NewSharedCache(2, 1*time.Minute)
 
-	cachedRepo := NewCachedDestinationRepository(apiMock, l1Cache, l2Mock, log)
+	cachedRepo := NewCachedDestinationRepository(context.Background(), apiMock, l1Cache, l2Mock, log)
 
-	res, err := cachedRepo.GetAll(context.Background(), "MOW")
+	t.Cleanup(cachedRepo.Close)
+	res, err := cachedRepo.GetAll(context.Background(), testCacheSearch("MOW"))
 	if err != nil {
 		t.Fatalf("Ожидался успех, получено: %v", err)
 	}
@@ -55,24 +57,25 @@ func TestCache_AllMiss_FetchFromAPI(t *testing.T) {
 		t.Error("Данные из API не долетели до юзера")
 	}
 
-	if _, ok := l2Mock.store["destinations:MOW"]; !ok {
+	if _, ok := l2Mock.store[testCacheKey]; !ok {
 		t.Error("Данные не закешировались в L2 (Redis) при промахе")
 	}
 }
 
 // TestCache_L1Hit — Попадание в L1. Сервер берет данные мгновенно из ОЗУ!
 func TestCache_L1Hit(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	apiMock := &mockApiRepo{err: errors.New("интернет упал!")}
 	l2Mock := &mockL2Cache{store: make(map[string][]domain.Destination)}
 	l1Cache := NewSharedCache(2, 1*time.Minute)
 
 	mockData := []domain.Destination{{ID: 2, City: "LED", Price: 5000}}
-	l1Cache.Set("destinations:MOW", mockData)
+	l1Cache.Set(testCacheKey, mockData)
 
-	cachedRepo := NewCachedDestinationRepository(apiMock, l1Cache, l2Mock, log)
+	cachedRepo := NewCachedDestinationRepository(context.Background(), apiMock, l1Cache, l2Mock, log)
 
-	res, err := cachedRepo.GetAll(context.Background(), "MOW")
+	t.Cleanup(cachedRepo.Close)
+	res, err := cachedRepo.GetAll(context.Background(), testCacheSearch("MOW"))
 	if err != nil {
 		t.Fatalf("Ожидался успех из L1, получено: %v", err)
 	}

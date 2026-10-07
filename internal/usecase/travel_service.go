@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -10,6 +12,13 @@ import (
 	"github.com/Damirka228/travel_aggregator/internal/domain"
 	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	ErrFlightSourcesUnavailable = errors.New("all flight sources unavailable")
+	ErrInvalidTravelDays        = errors.New("days must be positive")
+	ErrInvalidDepartureDate     = errors.New("departure date is required")
+	ErrInvalidBudget            = errors.New("budget must be finite and greater than 1000")
 )
 
 type TourItem struct {
@@ -39,12 +48,39 @@ func NewTravelService(log logger.Logger, hotelRepo domain.HotelRepository, fligh
 	}
 }
 
-func (s *TravelService) FindDestinations(ctx context.Context, budget float64, days int, origin string) (TravelResponse, error) {
-	var (
-		mtx        sync.Mutex
-		allFlights []domain.Destination
-		g          errgroup.Group
+func (s *TravelService) FindDestinations(ctx context.Context, budget float64, days int, origin string, departureDate time.Time) (TravelResponse, error) {
+	if math.IsNaN(budget) || math.IsInf(budget, 0) || budget <= 1000 {
+		return TravelResponse{}, ErrInvalidBudget
+	}
+
+	if days <= 0 {
+		return TravelResponse{}, ErrInvalidTravelDays
+	}
+
+	if departureDate.IsZero() {
+		return TravelResponse{}, ErrInvalidDepartureDate
+	}
+
+	departureDate = time.Date(
+		departureDate.Year(),
+		departureDate.Month(),
+		departureDate.Day(),
+		0, 0, 0, 0,
+		time.UTC,
 	)
+
+	var (
+		mtx               sync.Mutex
+		allFlights        []domain.Destination
+		g                 errgroup.Group
+		successfulSources int
+	)
+
+	search := domain.FlightSearch{
+		Origin:        origin,
+		DepartureDate: departureDate,
+		ReturnDate:    departureDate.AddDate(0, 0, days),
+	}
 
 	for _, repo := range s.flightRepos {
 		repo := repo
@@ -52,13 +88,14 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 			reqContext, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 
-			items, err := repo.GetAll(reqContext, origin)
+			items, err := repo.GetAll(reqContext, search)
 			if err != nil {
 				s.log.Warn().Err(err).Str("repo_type", fmt.Sprintf("%T", repo)).Msg("Источник билетов не ответил")
 				return nil
 			}
 
 			mtx.Lock()
+			successfulSources++
 			allFlights = append(allFlights, items...)
 			mtx.Unlock()
 			return nil
@@ -69,9 +106,20 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 		return TravelResponse{}, err
 	}
 
+	if err := ctx.Err(); err != nil {
+		return TravelResponse{}, err
+	}
+
+	if successfulSources == 0 {
+		return TravelResponse{}, ErrFlightSourcesUnavailable
+	}
+
 	var combinedTours []TourItem
 
 	for _, flight := range allFlights {
+		if flight.Days != days {
+			continue
+		}
 		hotels, err := s.hotelRepo.GetByCity(ctx, flight.City)
 		if err != nil || len(hotels) == 0 {
 			continue
@@ -80,7 +128,7 @@ func (s *TravelService) FindDestinations(ctx context.Context, budget float64, da
 		for _, hotel := range hotels {
 			totalPrice := flight.Price + (hotel.Price * float64(days))
 
-			if totalPrice > budget || flight.Days > days {
+			if totalPrice > budget {
 				continue
 			}
 

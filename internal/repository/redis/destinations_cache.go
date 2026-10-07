@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -24,6 +25,11 @@ func NewDestinationsCache(client *redis.Client, ttl time.Duration) *Destinations
 
 func (c *DestinationsCache) Get(ctx context.Context, key string) ([]domain.Destination, bool) {
 	raw, err := c.redisClient.Get(ctx, key).Result()
+
+	if errors.Is(err, redis.Nil) {
+		return nil, false
+	}
+
 	if err != nil {
 		log.Printf("error get redis: %s", err)
 		return nil, false

@@ -7,29 +7,64 @@ package dbqueries
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getAllDestinations = `-- name: GetAllDestinations :many
-
-SELECT id, city, country, price, days FROM destinations
+SELECT
+    id,
+    origin,
+    city,
+    country,
+    price,
+    (return_date - departure_date)::integer AS days,
+    departure_at,
+    return_at
+FROM destinations
+WHERE origin = $1::text
+  AND departure_date = $2::date
+  AND return_date = $3::date
+  AND departure_at IS NOT NULL
+  AND return_at IS NOT NULL
+ORDER BY price ASC, id ASC
 `
 
-// queries/destinations.sql
-func (q *Queries) GetAllDestinations(ctx context.Context) ([]Destination, error) {
-	rows, err := q.db.Query(ctx, getAllDestinations)
+type GetAllDestinationsParams struct {
+	Origin        string
+	DepartureDate pgtype.Date
+	ReturnDate    pgtype.Date
+}
+
+type GetAllDestinationsRow struct {
+	ID          int32
+	Origin      pgtype.Text
+	City        string
+	Country     string
+	Price       pgtype.Numeric
+	Days        int32
+	DepartureAt pgtype.Timestamptz
+	ReturnAt    pgtype.Timestamptz
+}
+
+func (q *Queries) GetAllDestinations(ctx context.Context, arg GetAllDestinationsParams) ([]GetAllDestinationsRow, error) {
+	rows, err := q.db.Query(ctx, getAllDestinations, arg.Origin, arg.DepartureDate, arg.ReturnDate)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Destination
+	var items []GetAllDestinationsRow
 	for rows.Next() {
-		var i Destination
+		var i GetAllDestinationsRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Origin,
 			&i.City,
 			&i.Country,
 			&i.Price,
 			&i.Days,
+			&i.DepartureAt,
+			&i.ReturnAt,
 		); err != nil {
 			return nil, err
 		}

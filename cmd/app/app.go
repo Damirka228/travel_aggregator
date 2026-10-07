@@ -28,12 +28,14 @@ const (
 )
 
 type App struct {
-	httpServer   *http.Server
-	pgPool       *pgxpool.Pool
-	redisClient  *goredis.Client
-	log          logger.Logger
-	shutdownOnce sync.Once
-	shutdownErr  error
+	httpServer    *http.Server
+	cacheL1       *cache.SharedCache
+	pgPool        *pgxpool.Pool
+	redisClient   *goredis.Client
+	log           logger.Logger
+	shutdownOnce  sync.Once
+	shutdownErr   error
+	cachedAPIRepo *cache.CachedDestinationRepository
 }
 
 func NewApp(ctx context.Context) (_ *App, err error) {
@@ -75,12 +77,13 @@ func NewApp(ctx context.Context) (_ *App, err error) {
 	}
 
 	cacheL1Repo := cache.NewSharedCache(256, 5*time.Minute)
+	app.cacheL1 = cacheL1Repo
 	cacheRedisL2Repo := redis.NewDestinationsCache(app.redisClient, time.Hour)
 	hotelRepo := hotels.NewHotelRepository()
 	postgresRepo := postgres.NewPostgresDestinationRepository(app.pgPool)
 	repoAPI := travelpayouts.NewTravelpayoutsRepository(cfg.travelpayoutsToken)
-	cachedAPIRepo := cache.NewCachedDestinationRepository(repoAPI, cacheL1Repo, cacheRedisL2Repo, app.log)
-
+	cachedAPIRepo := cache.NewCachedDestinationRepository(ctx, repoAPI, cacheL1Repo, cacheRedisL2Repo, app.log)
+	app.cachedAPIRepo = cachedAPIRepo
 	postgresUserRepo := postgres.NewPostgresUserRepository(app.pgPool)
 	authService := usecase.NewAuthService(postgresUserRepo, app.log)
 	authHandler := deliveryhttp.NewAuthHandler(authService)
@@ -100,6 +103,24 @@ func NewApp(ctx context.Context) (_ *App, err error) {
 }
 
 func (a *App) Run(ctx context.Context) error {
+
+	cleanUpCtx, cancelCleanUp := context.WithCancel(ctx)
+	var cleanUpWg sync.WaitGroup
+
+	defer func() {
+		cancelCleanUp()
+		cleanUpWg.Wait()
+	}()
+
+	if a.cacheL1 != nil {
+		cleanUpWg.Add(1)
+
+		go func() {
+			defer cleanUpWg.Done()
+			a.cacheL1.RunCleanUp(cleanUpCtx)
+		}()
+	}
+
 	a.log.Info().Str("addr", a.httpServer.Addr).Msg("HTTP-сервер запускается")
 
 	serverErr := make(chan error, 1)
@@ -132,6 +153,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 					a.shutdownErr = errors.Join(a.shutdownErr, fmt.Errorf("close HTTP: %w", closeErr))
 				}
 			}
+		}
+
+		if a.cachedAPIRepo != nil {
+			a.cachedAPIRepo.Close()
 		}
 
 		if a.pgPool != nil {

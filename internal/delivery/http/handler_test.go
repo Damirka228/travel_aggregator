@@ -5,17 +5,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Damirka228/travel_aggregator/internal/domain"
 	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
 	"github.com/Damirka228/travel_aggregator/internal/usecase"
+	"github.com/rs/zerolog"
 )
 
 type mockFlightRepo struct{}
 
-func (m *mockFlightRepo) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
+func (m *mockFlightRepo) GetAll(ctx context.Context, search domain.FlightSearch) ([]domain.Destination, error) {
 	return []domain.Destination{
-		{ID: 1, City: "KZN", Country: "International", Price: 5000, Days: 3},
+		{ID: 1, Origin: search.Origin, City: "KZN", Country: "International", Price: 5000, Days: int(search.ReturnDate.Sub(search.DepartureDate) / (24 * time.Hour)), DepartureAt: search.DepartureDate, ReturnAt: search.ReturnDate},
 	}, nil
 }
 
@@ -28,13 +30,13 @@ func (m *mockHotelRepo) GetByCity(ctx context.Context, city string) ([]domain.Ho
 }
 
 func TestDestinationsHandler_Success(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	mockFlight := &mockFlightRepo{}
 	mockHotel := &mockHotelRepo{}
 	travelService := usecase.NewTravelService(log, mockHotel, mockFlight)
 	handler := NewHandler(travelService)
 
-	req, err := http.NewRequest("GET", "/destinations?budget=100000&days=5&city=MOW", nil)
+	req, err := http.NewRequest("GET", "/destinations?budget=100000&departure_date=2026-11-10&days=5&city=MOW", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,13 +54,13 @@ func TestDestinationsHandler_Success(t *testing.T) {
 }
 
 func TestDestinationsHandler_TooSmallBudget(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	mockFlight := &mockFlightRepo{}
 	mockHotel := &mockHotelRepo{}
 	travelService := usecase.NewTravelService(log, mockHotel, mockFlight)
 	handler := NewHandler(travelService)
 
-	req, err := http.NewRequest("GET", "/destinations?budget=500&days=5&city=MOW", nil)
+	req, err := http.NewRequest("GET", "/destinations?budget=500&departure_date=2026-11-10&days=5&city=MOW", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,13 +74,13 @@ func TestDestinationsHandler_TooSmallBudget(t *testing.T) {
 }
 
 func TestDestinationsHandler_MissingCity(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	mockFlight := &mockFlightRepo{}
 	mockHotel := &mockHotelRepo{}
 	travelService := usecase.NewTravelService(log, mockHotel, mockFlight)
 	handler := NewHandler(travelService)
 
-	req, err := http.NewRequest("GET", "/destinations?budget=50000&days=5", nil)
+	req, err := http.NewRequest("GET", "/destinations?budget=50000&departure_date=2026-11-10&days=5", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

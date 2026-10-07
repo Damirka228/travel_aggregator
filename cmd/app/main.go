@@ -26,7 +26,6 @@ func run() error {
 	}
 
 	serveErr := app.Run(ctx)
-	// Restore the default signal behavior so a second signal can force exit.
 	stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)

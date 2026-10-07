@@ -6,13 +6,14 @@ import (
 
 	"github.com/Damirka228/travel_aggregator/internal/domain"
 	"github.com/Damirka228/travel_aggregator/internal/infrastructure/logger"
+	"github.com/rs/zerolog"
 )
 
 type testFlightRepository struct {
 	flights []domain.Destination
 }
 
-func (t *testFlightRepository) GetAll(ctx context.Context, origin string) ([]domain.Destination, error) {
+func (t *testFlightRepository) GetAll(ctx context.Context, search domain.FlightSearch) ([]domain.Destination, error) {
 	return t.flights, nil
 }
 
@@ -26,16 +27,16 @@ func (m *mockHotelRepository) GetByCity(ctx context.Context, city string) ([]dom
 }
 
 func TestFindDestinations_Success(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	mockData := []domain.Destination{
-		{ID: 1, City: "KZN", Country: "International", Price: 5000, Days: 5},
+		{ID: 1, City: "KZN", Country: "International", Price: 5000, Days: 7},
 	}
 
 	flightRepo := &testFlightRepository{flights: mockData}
 	hotelRepo := &mockHotelRepository{}
 	service := NewTravelService(log, hotelRepo, flightRepo)
 
-	res, err := service.FindDestinations(context.Background(), 100000, 7, "MOW")
+	res, err := service.FindDestinations(context.Background(), 100000, 7, "MOW", travelTestDate())
 	if err != nil {
 		t.Fatalf("Expected success, got err: %v", err)
 	}
@@ -46,15 +47,15 @@ func TestFindDestinations_Success(t *testing.T) {
 }
 
 func TestFindDestinations_Empty(t *testing.T) {
-	log := logger.New()
+	log := logger.Logger{Logger: zerolog.Nop()}
 	mockData := []domain.Destination{
-		{ID: 1, City: "PAR", Country: "International", Price: 90000, Days: 5},
+		{ID: 1, City: "PAR", Country: "International", Price: 90000, Days: 7},
 	}
 	flightRepo := &testFlightRepository{flights: mockData}
 	hotelRepo := &mockHotelRepository{}
 	service := NewTravelService(log, hotelRepo, flightRepo)
 
-	res, err := service.FindDestinations(context.Background(), 10000, 7, "MOW")
+	res, err := service.FindDestinations(context.Background(), 10000, 7, "MOW", travelTestDate())
 	if err != nil {
 		t.Fatalf("Expected empty response without err, got err: %v", err)
 	}

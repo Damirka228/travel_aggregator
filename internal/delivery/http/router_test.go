@@ -25,7 +25,7 @@ func TestRouterRegistersAPIEndpoints(t *testing.T) {
 		method, path string
 		status       int
 	}{
-		{http.MethodGet, "/destinations?budget=100000&days=5&city=MOW", http.StatusOK},
+		{http.MethodGet, "/destinations?budget=100000&days=5&city=MOW&departure_date=2026-11-10", http.StatusOK},
 		{http.MethodPost, "/auth/signup", http.StatusBadRequest},
 		{http.MethodPost, "/auth/signin", http.StatusBadRequest},
 		{http.MethodGet, "/auth/signup", http.StatusMethodNotAllowed},
